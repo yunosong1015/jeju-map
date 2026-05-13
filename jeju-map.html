@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>제주도 탐방 지도 — 분단별 추천 프로그램</title>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+  crossorigin=""
+/>
+<style>
+  :root {
+    --primary: #2b6cb0;
+    --primary-dark: #1e4e8c;
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --text: #1a202c;
+    --muted: #718096;
+    --border: #e2e8f0;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  header {
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    padding: 14px 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
+  header p { margin: 2px 0 0; font-size: 0.8rem; opacity: 0.9; }
+
+  main {
+    display: flex;
+    height: calc(100vh - 64px);
+  }
+
+  #sidebar {
+    width: 220px;
+    background: var(--card);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 14px;
+    flex-shrink: 0;
+  }
+
+  #sidebar h3 {
+    margin: 0 0 10px;
+    font-size: 0.9rem;
+    color: var(--primary-dark);
+  }
+
+  .filter-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.83rem;
+    margin-bottom: 2px;
+    transition: background 0.15s;
+  }
+  .filter-item:hover { background: #edf2f7; }
+  .filter-item.active { background: #e6f0fb; font-weight: 600; }
+  .filter-item.sub { padding-left: 22px; font-size: 0.8rem; }
+
+  .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+    flex-shrink: 0;
+  }
+
+  #map { flex: 1; height: 100%; }
+
+  #panel {
+    width: 380px;
+    background: var(--card);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px;
+    flex-shrink: 0;
+  }
+
+  #panel .empty {
+    color: var(--muted);
+    text-align: center;
+    margin-top: 60px;
+    font-size: 0.9rem;
+  }
+  #panel .empty .icon { font-size: 3rem; margin-bottom: 12px; }
+
+  #panel h2 {
+    margin: 0 0 4px;
+    font-size: 1.3rem;
+    color: var(--primary-dark);
+  }
+
+  .program-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    color: white;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+
+  .image-wrap {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #edf2f7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+    text-align: center;
+    padding: 10px;
+  }
+  .image-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .info-row {
+    display: flex;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88rem;
+  }
+  .info-row .label {
+    width: 64px;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .info-row .value { flex: 1; line-height: 1.5; }
+
+  .description {
+    margin-top: 14px;
+    font-size: 0.9rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+  }
+
+  .schedule {
+    margin-top: 14px;
+    padding: 12px;
+    background: #f7fafc;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+  .schedule .title { font-weight: 600; color: var(--primary-dark); margin-bottom: 6px; }
+  .schedule ul { margin: 0; padding-left: 18px; }
+  .schedule li { margin: 2px 0; }
+  .schedule li.current { font-weight: 600; color: var(--primary-dark); }
+
+  .marker-num {
+    background: white;
+    border: 3px solid;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 24px;
+    font-weight: 700;
+    font-size: 0.78rem;
+    color: var(--text);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+  }
+
+  .marker-food {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    text-align: center;
+    line-height: 26px;
+    font-weight: 700;
+    font-size: 0.72rem;
+    color: white;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+
+  .marker-group {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #6c5ce7;
+    color: white;
+    border: 2px solid white;
+    text-align: center;
+    line-height: 28px;
+    font-weight: 700;
+    font-size: 0.8rem;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  }
+
+  .sidebar-section {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .leaflet-popup-content { font-family: inherit; font-size: 0.85rem; margin: 8px 12px; }
+  .leaflet-popup-content b { color: var(--primary-dark); }
+
+  /* 모바일 전용 컨트롤 — 데스크탑에서는 숨김 */
+  .mobile-fab { display: none; }
+  .panel-close { display: none; }
+  .backdrop { display: none; }
+
+  /* 태블릿 — 사이드바를 슬라이드 형태로 */
+  @media (max-width: 1024px) {
+    #sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 280px;
+      max-width: 80%;
+      z-index: 1000;
+      transform: translateX(-105%);
+      transition: transform 0.25s ease;
+      box-shadow: 2px 0 16px rgba(0,0,0,0.18);
+    }
+    #sidebar.open { transform: translateX(0); }
+
+    .backdrop {
+      display: block;
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 900;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .backdrop.open { opacity: 1; pointer-events: auto; }
+
+    .mobile-fab {
+      display: flex;
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 800;
+      background: white;
+      border: none;
+      border-radius: 50%;
+      width: 46px;
+      height: 46px;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      font-size: 1.4rem;
+      cursor: pointer;
+    }
+  }
+
+  /* 모바일 — 패널을 바텀 시트로 */
+  @media (max-width: 768px) {
+    header {
+      padding: 10px 14px;
+      padding-top: max(10px, env(safe-area-inset-top));
+    }
+    header h1 { font-size: 1.05rem; }
+    header p { font-size: 0.72rem; }
+
+    main { height: calc(100vh - 56px); position: relative; }
+    #map { height: 100%; width: 100%; }
+
+    #panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 78vh;
+      max-height: 78vh;
+      border-left: none;
+      border-top: 1px solid var(--border);
+      border-radius: 18px 18px 0 0;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      z-index: 950;
+      padding-top: 34px;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.18);
+      padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+    #panel.open { transform: translateY(0); }
+
+    /* 드래그 핸들 */
+    #panel::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 42px;
+      height: 5px;
+      background: #cbd5e0;
+      border-radius: 3px;
+    }
+
+    .panel-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      width: 36px;
+      height: 36px;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 1;
+      z-index: 2;
+    }
+
+    #panel .empty { display: none; }
+
+    /* 터치하기 쉽도록 마커 살짝 크게 */
+    .marker-num { width: 34px; height: 34px; line-height: 28px; font-size: 0.85rem; }
+    .marker-food { width: 32px; height: 32px; line-height: 30px; font-size: 0.8rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🗺️ 제주도 탐방 지도</h1>
+    <p>분단별 추천 프로그램 · 마커를 클릭하면 안내가 표시됩니다.</p>
+  </div>
+</header>
+
+<main>
+  <button class="mobile-fab" id="filter-toggle" aria-label="필터 열기">☰</button>
+  <div class="backdrop" id="backdrop"></div>
+
+  <aside id="sidebar">
+    <h3>🎯 2분단 탐방지</h3>
+    <div id="group-filters"></div>
+    <div class="sidebar-section">
+      <h3>🗺️ 관광지 (프로그램별)</h3>
+      <div id="filters"></div>
+    </div>
+    <div class="sidebar-section">
+      <h3>🍴 식당 (구역별)</h3>
+      <div id="food-filters"></div>
+    </div>
+  </aside>
+
+  <div id="map"></div>
+
+  <aside id="panel">
+    <button class="panel-close" id="panel-close" aria-label="닫기">×</button>
+    <div class="empty">
+      <div class="icon">📍</div>
+      <div>지도의 번호 마커를<br>클릭하면 안내가 나타납니다.</div>
+    </div>
+  </aside>
+</main>
+
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""
+></script>
+
+<script>
+  // ─────────────────────────────────────────────────────────────
+  // 분단별 추천 프로그램 (PDF 내용 기반)
+  // ─────────────────────────────────────────────────────────────
+  const programs = {
+    P1: {
+      name: "1. 전통생활문화형",
+      color: "#8b4513",
+      description: '제주민속촌의 "전시형 전통"과 성읍민속마을의 "생활형 전통"을 함께 볼 수 있는 코스',
+      schedule: [
+        { time: "13:30~15:30", place: "제주민속촌" },
+        { time: "15:30~17:30", place: "성읍민속마을" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    },
+    P2: {
+      name: "2. 원도심 역사형",
+      color: "#c0392b",
+      description: "제주의 역사가 고스란히 담겨있는 원도심 역사 코스",
+      schedule: [
+        { time: "13:30~15:30", place: "제주목관아" },
+        { time: "15:30~17:30", place: "관덕정" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    },
+    P3: {
+      name: "3. 해녀·로컬문화형",
+      color: "#2980b9",
+      description: "제주 해녀·돌·향토문화를 이해하기 좋은 대표적인 코스",
+      schedule: [
+        { time: "13:30~15:30", place: "해녀박물관" },
+        { time: "15:30~17:30", place: "제주돌문화공원" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    },
+    P4: {
+      name: "4. 미술문화형",
+      color: "#8e44ad",
+      description: "전통공예와 현대미술을 관람할 수 있는 코스",
+      schedule: [
+        { time: "13:30~15:30", place: "본태뮤지엄" },
+        { time: "15:30~17:30", place: "제주도립김창열미술관" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    },
+    P5: {
+      name: "5. 디지털 아트형",
+      color: "#e91e63",
+      description: "국내 최대 규모의 몰입형 미디어아트와 독특한 멀티버스 미디어아트를 볼 수 있는 코스",
+      schedule: [
+        { time: "13:30~15:30", place: "아르떼뮤지엄" },
+        { time: "15:30~17:30", place: "노형슈퍼마켙" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    },
+    P6: {
+      name: "6. 숲 힐링형",
+      color: "#27ae60",
+      description: "한라산 자락의 자연생활 체험공원과 피톤치드를 한 몸에 느낄 수 있는 코스",
+      schedule: [
+        { time: "13:30~15:30", place: "휴애리 자연생활공원" },
+        { time: "15:30~17:30", place: "사려니숲길" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    },
+    P7: {
+      name: "7. 서부 감성형",
+      color: "#ec407a",
+      description: "제주의 차향과 꽃길이 어우러진 자연·문화·힐링 코스",
+      schedule: [
+        { time: "13:30~15:30", place: "오설록 티 뮤지엄" },
+        { time: "15:30~17:30", place: "카멜리아 힐" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    },
+    P8: {
+      name: "8. 동부 대표 절경형",
+      color: "#00897b",
+      description: "제주 동부를 대표하는 상징적 절경 코스",
+      schedule: [
+        { time: "13:30~15:30", place: "성산일출봉" },
+        { time: "15:30~17:30", place: "섭지코지" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    },
+    P9: {
+      name: "9. 남서부 지질·절경형",
+      color: "#e67e22",
+      description: "제주의 대표 지질명소로 지형과 해안 절경을 함께 볼 수 있는 코스",
+      schedule: [
+        { time: "13:30~15:30", place: "송악산 둘레길" },
+        { time: "15:30~17:30", place: "용머리해안" },
+        { time: "17:30~19:30", place: "석식 후 휴식" }
+      ]
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // 18개 관광지 (PDF 기반)
+  //  · image 항목에 PDF에서 캡처한 사진 파일명을 입력하세요
+  //    예) image: "images/jeju-folk.jpg"
+  // ─────────────────────────────────────────────────────────────
+  const locations = [
+    { id: 1, programId: "P1", name: "제주민속촌",
+      address: "제주 서귀포시 표선면 민속해안로 631-34",
+      coords: [33.31977, 126.83135], image: "images/01.png",
+      description: "제주의 전통 가옥과 생활 문화를 전시형으로 재현해 둔 야외 박물관입니다." },
+    { id: 2, programId: "P1", name: "성읍민속마을",
+      address: "제주 서귀포시 표선면 성읍리 3294",
+      coords: [33.38397, 126.79325], image: "images/02.png",
+      description: "조선시대 정의현 읍치였던 곳으로, 주민이 실제 거주하며 생활형 전통이 보존되어 있습니다." },
+    { id: 3, programId: "P2", name: "제주목관아",
+      address: "제주 제주시 관덕로 25",
+      coords: [33.51350, 126.52150], image: "images/03.png",
+      description: "조선시대 제주 행정의 중심이었던 목관아 건물군을 복원한 사적입니다." },
+    { id: 4, programId: "P2", name: "관덕정",
+      address: "제주 제주시 관덕로 19",
+      coords: [33.51344, 126.52132], image: "images/04.png",
+      description: "1448년 세워진 제주 최고(最古)의 목조 건물로, 보물로 지정되어 있습니다." },
+    { id: 5, programId: "P3", name: "해녀박물관",
+      address: "제주 제주시 구좌읍 해녀박물관길 26",
+      coords: [33.52602, 126.83057], image: "images/05.png",
+      description: "제주 해녀의 삶과 어업 문화, 항일운동의 역사를 보여주는 박물관입니다." },
+    { id: 6, programId: "P3", name: "제주돌문화공원",
+      address: "제주 제주시 조천읍 남조로 2023",
+      coords: [33.45935, 126.69810], image: "images/06.png",
+      description: "설문대할망 신화를 모티프로 한 대규모 야외 테마공원으로, 돌 문화를 체계적으로 전시합니다." },
+    { id: 7, programId: "P4", name: "본태뮤지엄",
+      address: "제주 서귀포시 안덕면 산록남로 762번길 79",
+      coords: [33.27894, 126.36534], image: "images/07.png",
+      description: "안도 다다오가 설계한 미술관으로, 전통 공예와 현대미술을 함께 만날 수 있습니다." },
+    { id: 8, programId: "P4", name: "제주도립김창열미술관",
+      address: "제주 제주시 한림읍 용금로 883-5",
+      coords: [33.39512, 126.28837], image: "images/08.png",
+      description: "'물방울 화가' 김창열의 작품을 상설 전시하는 도립 미술관입니다." },
+    { id: 9, programId: "P5", name: "아르떼뮤지엄",
+      address: "제주 제주시 애월읍 어림비로 478",
+      coords: [33.43479, 126.30976], image: "images/09.png",
+      description: "국내 최대 규모의 몰입형 미디어아트 전시관입니다." },
+    { id: 10, programId: "P5", name: "노형슈퍼마켙",
+      address: "제주 제주시 노형동 (제주특별자치도 제주시)",
+      coords: [33.48278, 126.47377], image: "images/10.png",
+      description: "멀티버스 콘셉트의 독특한 미디어아트 체험관입니다." },
+    { id: 11, programId: "P6", name: "휴애리 자연생활공원",
+      address: "제주 서귀포시 남원읍 신례동로 256",
+      coords: [33.32189, 126.65019], image: "images/11.png",
+      description: "계절별 꽃밭과 동물 체험, 흑돼지 공연 등으로 유명한 자연생활 체험공원입니다." },
+    { id: 12, programId: "P6", name: "사려니숲길",
+      address: "제주 제주시 봉개동 산 64-5",
+      coords: [33.41783, 126.66996], image: "images/12.png",
+      description: "삼나무·졸참나무가 우거진 평탄한 숲길로, 피톤치드 가득한 힐링 코스입니다." },
+    { id: 13, programId: "P7", name: "오설록 티 뮤지엄",
+      address: "제주 서귀포시 안덕면 신화역사로 15",
+      coords: [33.30568, 126.28944], image: "images/13.png",
+      description: "차의 역사와 문화를 전시한 박물관으로, 인근 녹차밭과 함께 둘러볼 수 있습니다." },
+    { id: 14, programId: "P7", name: "카멜리아 힐",
+      address: "제주 서귀포시 안덕면 병악로 166",
+      coords: [33.27607, 126.36128], image: "images/14.png",
+      description: "세계 각국의 동백과 사계절 꽃이 어우러진 대규모 수목원입니다." },
+    { id: 15, programId: "P8", name: "성산일출봉",
+      address: "제주 서귀포시 성산읍 일출로 284-12",
+      coords: [33.45818, 126.94257], image: "images/15.png",
+      description: "수성화산 분출로 형성된 응회구로, UNESCO 세계자연유산입니다." },
+    { id: 16, programId: "P8", name: "섭지코지",
+      address: "제주 서귀포시 성산읍 섭지코지로 107",
+      coords: [33.42325, 126.92983], image: "images/16.png",
+      description: "해안 절벽과 등대, 유채꽃밭이 어우러진 동부 대표 절경 명소입니다." },
+    { id: 17, programId: "P9", name: "송악산",
+      address: "제주 서귀포시 대정읍 송악관광로 421-1",
+      coords: [33.20169, 126.29331], image: "images/17.png",
+      description: "이중 분화구와 해안 절벽 둘레길을 따라 가파도·마라도를 조망할 수 있는 명소입니다." },
+    { id: 18, programId: "P9", name: "용머리해안",
+      address: "제주 서귀포시 안덕면 사계리 112-3",
+      coords: [33.23420, 126.31370], image: "images/18.png",
+      description: "수천만 년 침식 작용으로 형성된 응회환 해안으로, 용이 바다로 들어가는 형상입니다." }
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 식당 구역
+  // ─────────────────────────────────────────────────────────────
+  const regions = {
+    R1: { name: "제주시",   color: "#e74c3c" },
+    R2: { name: "서귀포",   color: "#f39c12" },
+    R3: { name: "서부",     color: "#3498db" },
+    R4: { name: "동부",     color: "#2ecc71" }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // 16개 식당 (PDF 5페이지 기반, 좌표는 주소 기반 근사치)
+  // ─────────────────────────────────────────────────────────────
+  const restaurants = [
+    // 제주시
+    { id: 1, regionId: "R1", name: "화목원",
+      phone: "0507-1380-0031", address: "제주 제주시 연화남길 41", coords: [33.4910, 126.4870] },
+    { id: 2, regionId: "R1", name: "제주으뜸흑돼지",
+      phone: "0507-1345-2209", address: "제주 제주시 동한두기길 23", coords: [33.5135, 126.5100] },
+    { id: 3, regionId: "R1", name: "제주고기국수 모던돔베 공항본점",
+      phone: "0507-1389-1693", address: "제주 제주시 1100로 3029 1층", coords: [33.4790, 126.4710] },
+    { id: 4, regionId: "R1", name: "2010제주상춘재",
+      phone: "064-725-1557",  address: "제주 제주시 중앙로 598 1층", coords: [33.5045, 126.5260] },
+
+    // 서귀포
+    { id: 5, regionId: "R2", name: "바다를 본대지 서귀포올레시장점",
+      phone: "064-900-1005",  address: "제주 서귀포시 칠십리로 123 2층", coords: [33.2510, 126.5630] },
+    { id: 6, regionId: "R2", name: "제주할망뚝배기",
+      phone: "0507-1426-9936", address: "제주 서귀포시 칠십리로 92", coords: [33.2515, 126.5615] },
+    { id: 7, regionId: "R2", name: "멋진녀석들 제주 서귀포점",
+      phone: "0507-1411-0917", address: "제주 서귀포시 서호로 241", coords: [33.2522, 126.5180] },
+    { id: 8, regionId: "R2", name: "어딸",
+      phone: "064-764-9010",  address: "제주 서귀포시 남원읍 남원회관로 65 1층", coords: [33.2790, 126.7180] },
+
+    // 서부
+    { id: 9, regionId: "R3", name: "제주한라국수",
+      phone: "064-738-6392",  address: "제주 서귀포시 대포복개로 138 1층", coords: [33.2483, 126.4218] },
+    { id: 10, regionId: "R3", name: "사계흑돼지",
+      phone: "064-792-1100",  address: "제주 서귀포시 안덕면 사계로 201 1층", coords: [33.2335, 126.3140] },
+    { id: 11, regionId: "R3", name: "제주베지스",
+      phone: "0507-1418-3454", address: "제주 제주시 한경면 녹차분재로 568", coords: [33.3360, 126.1840] },
+    { id: 12, regionId: "R3", name: "제주협재 바다해찬",
+      phone: "0507-1367-6261", address: "제주 제주시 한림읍 한림로 326", coords: [33.4123, 126.2627] },
+
+    // 동부
+    { id: 13, regionId: "R4", name: "성산갈치맛집",
+      phone: "0507-1450-7847", address: "제주 서귀포시 성산읍 한도로 90 1층", coords: [33.4660, 126.9300] },
+    { id: 14, regionId: "R4", name: "전망좋은횟집&흑돼지 성산본점",
+      phone: "0507-1364-1568", address: "제주 서귀포시 성산읍 일출로 248", coords: [33.4550, 126.9410] },
+    { id: 15, regionId: "R4", name: "성산 해녀 짬뽕",
+      phone: "0507-1445-1743", address: "제주 서귀포시 성산읍 일출로 275", coords: [33.4545, 126.9415] },
+    { id: 16, regionId: "R4", name: "제주 할망밥상 표선점",
+      phone: "064-787-4200",  address: "제주 서귀포시 표선면 표선동서로 177-1", coords: [33.3260, 126.8330] }
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 2분단 탐방지 (좌측 메뉴 최상단)
+  // ─────────────────────────────────────────────────────────────
+  const GROUP_COLOR = "#6c5ce7";
+  const groupVisits = [
+    { id: 1, name: "알뜨르 비행장",
+      coords: [33.1955, 126.2755], image: "",
+      description: "일제강점기 일본군이 건설한 군용 비행장으로, 격납고 등 당시 시설이 남아 있어 다크 투어리즘 명소로 알려져 있습니다." },
+    { id: 2, name: "섯알오름",
+      coords: [33.1989, 126.2691], image: "",
+      description: "알뜨르 비행장 인근에 위치한 오름으로, 제주 4·3 사건 당시 양민 학살이 일어났던 가슴 아픈 역사의 현장입니다." },
+    { id: 3, name: "표선면 가시리 마을",
+      coords: [33.3850, 126.7850], image: "",
+      description: "제주 중산간의 전통 마을. 녹산로 유채꽃길·따라비오름·갑마장길 등 자연과 목축 문화가 어우러진 곳입니다." },
+    { id: 4, name: "대정읍 노을 해안도로",
+      coords: [33.2300, 126.2400], image: "",
+      description: "일과리에서 영락리까지 이어지는 해안 도로로, 제주 서쪽의 대표 일몰 명소입니다." },
+    { id: 5, name: "포도 뮤지엄",
+      coords: [33.2789, 126.3653], image: "",
+      description: "안덕면에 위치한 현대미술관으로, 이주·디아스포라·소수자 등 사회적 주제의 기획전을 선보입니다." },
+    { id: 6, name: "한림여자중학교",
+      coords: [33.4135, 126.2670], image: "",
+      description: "제주 한림읍에 위치한 중학교." }
+  ];
+
+  // ─────────────────────────────────────────────────────────────
+  // 지도 초기화
+  // ─────────────────────────────────────────────────────────────
+  const map = L.map("map", { center: [33.38, 126.55], zoom: 10, minZoom: 9, maxZoom: 18 });
+
+  L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Tiles courtesy of <a href="https://www.openstreetmap.fr/">OSM France</a>',
+    subdomains: 'abc',
+    maxZoom: 19
+  }).addTo(map);
+  map.attributionControl.setPrefix('');
+
+  const panel = document.getElementById("panel");
+  const filtersEl = document.getElementById("filters");
+  const foodFiltersEl = document.getElementById("food-filters");
+  const groupFiltersEl = document.getElementById("group-filters");
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("backdrop");
+  const filterToggle = document.getElementById("filter-toggle");
+  const panelClose = document.getElementById("panel-close");
+  const tourMarkers = {};
+  const foodMarkers = {};
+  const groupMarkers = {};
+
+  const isMobile = () => window.matchMedia("(max-width: 768px)").matches;
+  const isTabletOrSmaller = () => window.matchMedia("(max-width: 1024px)").matches;
+
+  function openPanel()  { panel.classList.add("open"); }
+  function closePanel() { panel.classList.remove("open"); }
+  function openSidebar()  { sidebar.classList.add("open"); backdrop.classList.add("open"); }
+  function closeSidebar() { sidebar.classList.remove("open"); backdrop.classList.remove("open"); }
+
+  filterToggle.addEventListener("click", openSidebar);
+  backdrop.addEventListener("click", closeSidebar);
+  panelClose.addEventListener("click", closePanel);
+
+  // 필터 사이드바
+  function buildFilters() {
+    // 2분단 탐방지 — 전체 보기 + 개별 6곳 하위메뉴
+    const groupAll = document.createElement("div");
+    groupAll.className = "filter-item active";
+    groupAll.dataset.id = "GROUP_ALL";
+    groupAll.innerHTML = `<div class="dot" style="background:${GROUP_COLOR};"></div><span>2분단 탐방지 전체 보기</span>`;
+    groupAll.onclick = () => setGroupFilter("ALL");
+    groupFiltersEl.appendChild(groupAll);
+
+    groupVisits.forEach(g => {
+      const item = document.createElement("div");
+      item.className = "filter-item sub";
+      item.dataset.id = String(g.id);
+      item.innerHTML = `<div class="dot" style="background:${GROUP_COLOR};"></div><span>${g.id}. ${escapeHtml(g.name)}</span>`;
+      item.onclick = () => setGroupFilter(g.id);
+      groupFiltersEl.appendChild(item);
+    });
+
+    const all = document.createElement("div");
+    all.className = "filter-item";
+    all.dataset.id = "ALL";
+    all.innerHTML = `<div class="dot" style="background:#666;"></div><span>관광지 전체 보기</span>`;
+    all.onclick = () => setTourFilter("ALL");
+    filtersEl.appendChild(all);
+
+    Object.entries(programs).forEach(([id, p]) => {
+      const item = document.createElement("div");
+      item.className = "filter-item";
+      item.dataset.id = id;
+      item.innerHTML = `<div class="dot" style="background:${p.color};"></div><span>${escapeHtml(p.name)}</span>`;
+      item.onclick = () => setTourFilter(id);
+      filtersEl.appendChild(item);
+    });
+
+    // 식당 필터
+    const allFood = document.createElement("div");
+    allFood.className = "filter-item";
+    allFood.dataset.id = "ALL_FOOD";
+    allFood.innerHTML = `<div class="dot" style="background:#666;border-radius:4px;"></div><span>식당 전체 보기</span>`;
+    allFood.onclick = () => setFoodFilter("ALL");
+    foodFiltersEl.appendChild(allFood);
+
+    Object.entries(regions).forEach(([id, r]) => {
+      const item = document.createElement("div");
+      item.className = "filter-item";
+      item.dataset.id = id;
+      item.innerHTML = `<div class="dot" style="background:${r.color};border-radius:4px;"></div><span>${escapeHtml(r.name)}</span>`;
+      item.onclick = () => setFoodFilter(id);
+      foodFiltersEl.appendChild(item);
+    });
+  }
+
+  let groupActive = "ALL"; // "ALL" | "NONE" | "1".."6"
+
+  function setGroupFilter(id) {
+    const key = String(id);
+    // 같은 필터를 다시 누르면 토글로 꺼짐
+    if (key === String(groupActive)) {
+      groupActive = "NONE";
+    } else {
+      groupActive = key;
+    }
+
+    groupFiltersEl.querySelectorAll(".filter-item").forEach(el => {
+      const isAllBtn = el.dataset.id === "GROUP_ALL";
+      const active = (groupActive === "ALL" && isAllBtn) ||
+                     (groupActive !== "ALL" && groupActive !== "NONE" && el.dataset.id === groupActive);
+      el.classList.toggle("active", active);
+    });
+
+    groupVisits.forEach(g => {
+      const visible = groupActive === "ALL" || String(g.id) === groupActive;
+      const m = groupMarkers[g.id];
+      if (!m) return;
+      if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
+      else { if (map.hasLayer(m)) map.removeLayer(m); }
+    });
+
+    // 개별 지점 클릭 시 패널 자동 표시
+    if (groupActive !== "ALL" && groupActive !== "NONE") {
+      const g = groupVisits.find(x => String(x.id) === groupActive);
+      if (g) {
+        renderGroupPanel(g);
+        openPanel();
+        if (!isMobile()) map.panTo(g.coords);
+      }
+    }
+
+    if (isTabletOrSmaller()) closeSidebar();
+  }
+
+  let tourActive = "NONE"; // "ALL" | "NONE" | "P1".."P9"
+
+  function setTourFilter(id) {
+    // 같은 필터를 다시 누르면 토글로 꺼짐
+    if (id === tourActive) id = "NONE";
+    tourActive = id;
+
+    filtersEl.querySelectorAll(".filter-item").forEach(el => {
+      const isActive = id !== "NONE" && el.dataset.id === id;
+      el.classList.toggle("active", isActive);
+    });
+
+    locations.forEach(loc => {
+      const visible = id === "ALL" || loc.programId === id;
+      const m = tourMarkers[loc.id];
+      if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
+      else { if (map.hasLayer(m)) map.removeLayer(m); }
+    });
+    if (isTabletOrSmaller()) closeSidebar();
+  }
+
+  let foodActive = "NONE"; // "ALL" | "NONE" | "R1".."R4"
+
+  function setFoodFilter(id) {
+    // 같은 필터를 다시 누르면 토글로 꺼짐
+    if (id === foodActive) id = "NONE";
+    foodActive = id;
+
+    foodFiltersEl.querySelectorAll(".filter-item").forEach(el => {
+      const isAllBtn = el.dataset.id === "ALL_FOOD";
+      const isActive = (id === "ALL" && isAllBtn) ||
+                       (id !== "ALL" && id !== "NONE" && el.dataset.id === id);
+      el.classList.toggle("active", isActive);
+    });
+
+    restaurants.forEach(r => {
+      const visible = id === "ALL" || r.regionId === id;
+      const m = foodMarkers[r.id];
+      if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
+      else { if (map.hasLayer(m)) map.removeLayer(m); }
+    });
+    if (isTabletOrSmaller()) closeSidebar();
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str ?? "";
+    return div.innerHTML;
+  }
+
+  function renderPanel(loc) {
+    const p = programs[loc.programId];
+    const imgHtml = loc.image
+      ? `<img src="${loc.image}" alt="${escapeHtml(loc.name)}" onerror="this.parentElement.innerHTML='이미지를 불러올 수 없습니다.<br>(${escapeHtml(loc.image)})'">`
+      : `<span>📷 사진을 추가하려면 데이터의 <b>image</b> 항목에 파일 경로를 입력하세요.<br><small>(예: image: "images/${loc.id}.jpg")</small></span>`;
+
+    const scheduleHtml = p.schedule.map(s => {
+      const isCurrent = s.place.includes(loc.name) || loc.name.includes(s.place);
+      return `<li class="${isCurrent ? 'current' : ''}">${s.time} — ${escapeHtml(s.place)}</li>`;
+    }).join("");
+
+    panel.innerHTML = `
+      <h2>${escapeHtml(loc.name)}</h2>
+      <span class="program-badge" style="background:${p.color};">${escapeHtml(p.name)}</span>
+
+      <div class="image-wrap">${imgHtml}</div>
+
+      <div class="info-row"><div class="label">주소</div><div class="value">${escapeHtml(loc.address)}</div></div>
+      <div class="info-row"><div class="label">좌표</div><div class="value">${loc.coords[0].toFixed(5)}, ${loc.coords[1].toFixed(5)}</div></div>
+      <div class="info-row"><div class="label">프로그램</div><div class="value">${escapeHtml(p.description)}</div></div>
+
+      <div class="description">${escapeHtml(loc.description)}</div>
+
+      <div class="schedule">
+        <div class="title">📅 ${escapeHtml(p.name)} 일정</div>
+        <ul>${scheduleHtml}</ul>
+      </div>
+    `;
+  }
+
+  function renderGroupPanel(g) {
+    const imgHtml = g.image
+      ? `<img src="${g.image}" alt="${escapeHtml(g.name)}" onerror="this.parentElement.innerHTML='이미지를 불러올 수 없습니다.<br>(${escapeHtml(g.image)})'">`
+      : `<span>📷 사진을 추가하려면 데이터의 <b>image</b> 항목에 파일 경로를 입력하세요.<br><small>(예: image: "images/group-${g.id}.jpg")</small></span>`;
+
+    panel.innerHTML = `
+      <h2>🎯 ${escapeHtml(g.name)}</h2>
+      <span class="program-badge" style="background:${GROUP_COLOR};">2분단 탐방지</span>
+
+      <div class="image-wrap">${imgHtml}</div>
+
+      <div class="info-row"><div class="label">좌표</div><div class="value">${g.coords[0].toFixed(5)}, ${g.coords[1].toFixed(5)}</div></div>
+
+      <div class="description">${escapeHtml(g.description)}</div>
+    `;
+  }
+
+  function renderRestaurantPanel(r) {
+    const region = regions[r.regionId];
+    const telLink = r.phone.replace(/[^0-9]/g, "");
+    panel.innerHTML = `
+      <h2>🍴 ${escapeHtml(r.name)}</h2>
+      <span class="program-badge" style="background:${region.color};">${escapeHtml(region.name)} 구역 식당</span>
+
+      <div class="info-row"><div class="label">전화</div><div class="value"><a href="tel:${telLink}">${escapeHtml(r.phone)}</a></div></div>
+      <div class="info-row"><div class="label">주소</div><div class="value">${escapeHtml(r.address)}</div></div>
+      <div class="info-row"><div class="label">좌표</div><div class="value">${r.coords[0].toFixed(5)}, ${r.coords[1].toFixed(5)}</div></div>
+
+      <div class="schedule">
+        <div class="title">💡 안내</div>
+        <div style="font-size:0.85rem;line-height:1.6;">식당이 혼잡할 수 있으니 예약하시는 것을 추천드립니다.</div>
+      </div>
+    `;
+  }
+
+  // 관광지 마커 아이콘 (원형, 번호)
+  function makeTourIcon(color, num) {
+    return L.divIcon({
+      className: "",
+      html: `<div class="marker-num" style="border-color:${color};">${num}</div>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+      popupAnchor: [0, -16]
+    });
+  }
+
+  // 식당 마커 아이콘 (사각형, 포크 아이콘 + 번호)
+  function makeFoodIcon(color, num) {
+    return L.divIcon({
+      className: "",
+      html: `<div class="marker-food" style="background:${color};">${num}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+      popupAnchor: [0, -14]
+    });
+  }
+
+  // 2분단 탐방지 마커 아이콘 (보라색 채움 원형)
+  function makeGroupIcon(num) {
+    return L.divIcon({
+      className: "",
+      html: `<div class="marker-group">${num}</div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -16]
+    });
+  }
+
+  // 마커 생성 (관광지·식당은 처음에 지도에 추가하지 않음 — 필터로 켤 때만 표시)
+  const bounds = [];
+  locations.forEach(loc => {
+    const p = programs[loc.programId];
+    const marker = L.marker(loc.coords, { icon: makeTourIcon(p.color, loc.id) });
+    marker.bindPopup(`<b>${loc.id}. ${escapeHtml(loc.name)}</b><br><small>${escapeHtml(p.name)}</small>`);
+    marker.on("click", () => {
+      renderPanel(loc);
+      openPanel();
+      if (!isMobile()) map.panTo(loc.coords);
+    });
+    tourMarkers[loc.id] = marker;
+    bounds.push(loc.coords);
+  });
+
+  restaurants.forEach(r => {
+    const region = regions[r.regionId];
+    const marker = L.marker(r.coords, { icon: makeFoodIcon(region.color, r.id) });
+    marker.bindPopup(`<b>🍴 ${escapeHtml(r.name)}</b><br><small>${escapeHtml(region.name)} · ${escapeHtml(r.phone)}</small>`);
+    marker.on("click", () => {
+      renderRestaurantPanel(r);
+      openPanel();
+      if (!isMobile()) map.panTo(r.coords);
+    });
+    foodMarkers[r.id] = marker;
+    bounds.push(r.coords);
+  });
+
+  groupVisits.forEach(g => {
+    const marker = L.marker(g.coords, { icon: makeGroupIcon(g.id) }).addTo(map);
+    marker.bindPopup(`<b>🎯 ${escapeHtml(g.name)}</b><br><small>2분단 탐방지</small>`);
+    marker.on("click", () => {
+      renderGroupPanel(g);
+      openPanel();
+      if (!isMobile()) map.panTo(g.coords);
+    });
+    groupMarkers[g.id] = marker;
+    bounds.push(g.coords);
+  });
+
+  buildFilters();
+  if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
+</script>
+
+</body>
+</html>

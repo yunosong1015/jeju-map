@@ -1,0 +1,17 @@
+# Source PDF reference material (school internal)
+제주여행자료/
+
+# Image extraction scratch folder
+images_raw/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# Claude harness
+.claude/
