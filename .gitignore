@@ -15,3 +15,5 @@ desktop.ini
 
 # Claude harness
 .claude/
+
+.vercel
