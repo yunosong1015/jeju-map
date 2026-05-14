@@ -662,6 +662,36 @@
   backdrop.addEventListener("click", closeSidebar);
   panelClose.addEventListener("click", closePanel);
 
+  // 모바일: 패널 상단을 아래로 드래그하면 닫힘
+  let panelDragStart = null;
+  let panelDragDelta = 0;
+  panel.addEventListener("touchstart", (e) => {
+    if (!isMobile()) return;
+    const rect = panel.getBoundingClientRect();
+    const touchY = e.touches[0].clientY;
+    if (touchY - rect.top > 50) return; // 상단 50px 영역에서만 드래그 시작
+    panelDragStart = touchY;
+    panelDragDelta = 0;
+    panel.style.transition = "none";
+  }, { passive: true });
+  panel.addEventListener("touchmove", (e) => {
+    if (panelDragStart === null) return;
+    panelDragDelta = e.touches[0].clientY - panelDragStart;
+    if (panelDragDelta < 0) panelDragDelta = 0;
+    panel.style.transform = `translateY(${panelDragDelta}px)`;
+    e.preventDefault();
+  }, { passive: false });
+  function endPanelDrag() {
+    if (panelDragStart === null) return;
+    panel.style.transition = "";
+    panel.style.transform = "";
+    if (panelDragDelta > 80) closePanel();
+    panelDragStart = null;
+    panelDragDelta = 0;
+  }
+  panel.addEventListener("touchend", endPanelDrag);
+  panel.addEventListener("touchcancel", endPanelDrag);
+
   // 필터 사이드바
   function buildFilters() {
     // 2분단 탐방지 — 6개 지점을 직접 노출
@@ -722,9 +752,11 @@
     } else {
       m.addTo(map);
       el?.classList.add("active");
-      renderGroupPanel(g);
-      openPanel();
-      if (!isMobile()) map.panTo(g.coords);
+      map.panTo(g.coords);
+      if (!isMobile()) {
+        renderGroupPanel(g);
+        openPanel();
+      }
     }
   }
 
@@ -775,9 +807,11 @@
     } else {
       m.addTo(map);
       el?.classList.add("active");
-      renderPanel(loc);
-      openPanel();
-      if (!isMobile()) map.panTo(loc.coords);
+      map.panTo(loc.coords);
+      if (!isMobile()) {
+        renderPanel(loc);
+        openPanel();
+      }
     }
   }
 
@@ -830,9 +864,11 @@
     } else {
       m.addTo(map);
       el?.classList.add("active");
-      renderRestaurantPanel(rest);
-      openPanel();
-      if (!isMobile()) map.panTo(rest.coords);
+      map.panTo(rest.coords);
+      if (!isMobile()) {
+        renderRestaurantPanel(rest);
+        openPanel();
+      }
     }
   }
 
