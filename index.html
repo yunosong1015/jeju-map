@@ -694,7 +694,14 @@
 
   // 필터 사이드바
   function buildFilters() {
-    // 2분단 탐방지 — 6개 지점을 직접 노출
+    // 2분단 탐방지 — 전체 보기 + 6개 지점
+    const groupAll = document.createElement("div");
+    groupAll.className = "filter-item";
+    groupAll.dataset.id = "GROUP_ALL";
+    groupAll.innerHTML = `<div class="dot" style="background:${GROUP_COLOR};"></div><span>전체 보기</span>`;
+    groupAll.onclick = toggleAllGroupMarkers;
+    groupFiltersEl.appendChild(groupAll);
+
     groupVisits.forEach(g => {
       const item = document.createElement("div");
       item.className = "filter-item";
@@ -712,10 +719,20 @@
       item.onclick = () => setTourFilter(id);
       filtersEl.appendChild(item);
 
+      // 프로그램별 전체 보기 하위 항목
+      const allSub = document.createElement("div");
+      allSub.className = "filter-item sub";
+      allSub.dataset.programAll = id;
+      allSub.dataset.program = id;
+      allSub.innerHTML = `<div class="dot" style="background:${p.color};"></div><span>전체 보기</span>`;
+      allSub.onclick = () => toggleAllTourMarkers(id);
+      filtersEl.appendChild(allSub);
+
       locations.filter(l => l.programId === id).forEach(loc => {
         const sub = document.createElement("div");
         sub.className = "filter-item sub";
         sub.dataset.locId = String(loc.id);
+        sub.dataset.program = id;
         sub.innerHTML = `<div class="dot" style="background:${p.color};"></div><span>${loc.id}. ${escapeHtml(loc.name)}</span>`;
         sub.onclick = () => toggleTourMarker(loc);
         filtersEl.appendChild(sub);
@@ -731,10 +748,20 @@
       item.onclick = () => setFoodFilter(id);
       foodFiltersEl.appendChild(item);
 
+      // 구역별 전체 보기 하위 항목
+      const allSub = document.createElement("div");
+      allSub.className = "filter-item sub";
+      allSub.dataset.regionAll = id;
+      allSub.dataset.region = id;
+      allSub.innerHTML = `<div class="dot" style="background:${r.color};border-radius:4px;"></div><span>전체 보기</span>`;
+      allSub.onclick = () => toggleAllFoodMarkers(id);
+      foodFiltersEl.appendChild(allSub);
+
       restaurants.filter(rest => rest.regionId === id).forEach(rest => {
         const sub = document.createElement("div");
         sub.className = "filter-item sub";
         sub.dataset.restId = String(rest.id);
+        sub.dataset.region = id;
         sub.innerHTML = `<div class="dot" style="background:${r.color};border-radius:4px;"></div><span>${rest.id}. ${escapeHtml(rest.name)}</span>`;
         sub.onclick = () => toggleFoodMarker(rest);
         foodFiltersEl.appendChild(sub);
@@ -742,42 +769,70 @@
     });
   }
 
+  function syncGroupActive() {
+    const allVisible = groupVisits.length > 0 && groupVisits.every(g => map.hasLayer(groupMarkers[g.id]));
+    groupFiltersEl.querySelectorAll(".filter-item").forEach(el => {
+      if (el.dataset.id === "GROUP_ALL") {
+        el.classList.toggle("active", allVisible);
+      } else if (el.dataset.id) {
+        const m = groupMarkers[Number(el.dataset.id)];
+        el.classList.toggle("active", !!(m && map.hasLayer(m)));
+      }
+    });
+  }
+
   function toggleGroupMarker(g) {
     const m = groupMarkers[g.id];
     if (!m) return;
-    const el = groupFiltersEl.querySelector(`.filter-item[data-id="${g.id}"]`);
     if (map.hasLayer(m)) {
       map.removeLayer(m);
-      el?.classList.remove("active");
     } else {
       m.addTo(map);
-      el?.classList.add("active");
       map.panTo(g.coords);
       if (!isMobile()) {
         renderGroupPanel(g);
         openPanel();
       }
     }
+    syncGroupActive();
   }
 
-  let tourActive = "NONE"; // "ALL" | "NONE" | "P1".."P9"
+  function toggleAllGroupMarkers() {
+    const anyVisible = groupVisits.some(g => map.hasLayer(groupMarkers[g.id]));
+    groupVisits.forEach(g => {
+      const m = groupMarkers[g.id];
+      if (!m) return;
+      if (anyVisible) {
+        if (map.hasLayer(m)) map.removeLayer(m);
+      } else {
+        if (!map.hasLayer(m)) m.addTo(map);
+      }
+    });
+    if (!anyVisible && groupVisits.length) {
+      map.fitBounds(groupVisits.map(g => g.coords), { padding: [40, 40] });
+    }
+    syncGroupActive();
+  }
+
+  let tourActive = "NONE"; // "NONE" | "P1".."P9"
 
   function syncTourSubActive() {
     filtersEl.querySelectorAll(".filter-item.sub[data-loc-id]").forEach(el => {
       const m = tourMarkers[Number(el.dataset.locId)];
       el.classList.toggle("active", !!(m && map.hasLayer(m)));
     });
+    filtersEl.querySelectorAll(".filter-item.sub[data-program-all]").forEach(el => {
+      const programId = el.dataset.programAll;
+      const locs = locations.filter(l => l.programId === programId);
+      const allVisible = locs.length > 0 && locs.every(l => map.hasLayer(tourMarkers[l.id]));
+      el.classList.toggle("active", allVisible);
+    });
   }
 
   function updateTourSubVisibility() {
-    filtersEl.querySelectorAll(".filter-item.sub[data-loc-id]").forEach(el => {
-      const loc = locations.find(l => l.id === Number(el.dataset.locId));
-      if (!loc) return;
-      let visible;
-      if (tourActive === "ALL") visible = true;
-      else if (tourActive === "NONE") visible = false;
-      else visible = loc.programId === tourActive;
-      el.style.display = visible ? "" : "none";
+    filtersEl.querySelectorAll(".filter-item.sub").forEach(el => {
+      const program = el.dataset.program;
+      el.style.display = program && program === tourActive ? "" : "none";
     });
   }
 
@@ -787,7 +842,7 @@
     tourActive = id;
 
     filtersEl.querySelectorAll(".filter-item").forEach(el => {
-      if (el.dataset.locId) return; // 하위 항목은 별도 처리
+      if (el.classList.contains("sub")) return; // 하위 항목은 별도 처리
       const isActive = id !== "NONE" && el.dataset.id === id;
       el.classList.toggle("active", isActive);
     });
@@ -800,39 +855,56 @@
   function toggleTourMarker(loc) {
     const m = tourMarkers[loc.id];
     if (!m) return;
-    const el = filtersEl.querySelector(`.filter-item.sub[data-loc-id="${loc.id}"]`);
     if (map.hasLayer(m)) {
       map.removeLayer(m);
-      el?.classList.remove("active");
     } else {
       m.addTo(map);
-      el?.classList.add("active");
       map.panTo(loc.coords);
       if (!isMobile()) {
         renderPanel(loc);
         openPanel();
       }
     }
+    syncTourSubActive();
   }
 
-  let foodActive = "NONE"; // "ALL" | "NONE" | "R1".."R4"
+  function toggleAllTourMarkers(programId) {
+    const locs = locations.filter(l => l.programId === programId);
+    const anyVisible = locs.some(l => map.hasLayer(tourMarkers[l.id]));
+    locs.forEach(l => {
+      const m = tourMarkers[l.id];
+      if (!m) return;
+      if (anyVisible) {
+        if (map.hasLayer(m)) map.removeLayer(m);
+      } else {
+        if (!map.hasLayer(m)) m.addTo(map);
+      }
+    });
+    if (!anyVisible && locs.length) {
+      map.fitBounds(locs.map(l => l.coords), { padding: [40, 40] });
+    }
+    syncTourSubActive();
+  }
+
+  let foodActive = "NONE"; // "NONE" | "R1".."R4"
 
   function syncFoodSubActive() {
     foodFiltersEl.querySelectorAll(".filter-item.sub[data-rest-id]").forEach(el => {
       const m = foodMarkers[Number(el.dataset.restId)];
       el.classList.toggle("active", !!(m && map.hasLayer(m)));
     });
+    foodFiltersEl.querySelectorAll(".filter-item.sub[data-region-all]").forEach(el => {
+      const regionId = el.dataset.regionAll;
+      const rests = restaurants.filter(r => r.regionId === regionId);
+      const allVisible = rests.length > 0 && rests.every(r => map.hasLayer(foodMarkers[r.id]));
+      el.classList.toggle("active", allVisible);
+    });
   }
 
   function updateFoodSubVisibility() {
-    foodFiltersEl.querySelectorAll(".filter-item.sub[data-rest-id]").forEach(el => {
-      const rest = restaurants.find(r => r.id === Number(el.dataset.restId));
-      if (!rest) return;
-      let visible;
-      if (foodActive === "ALL") visible = true;
-      else if (foodActive === "NONE") visible = false;
-      else visible = rest.regionId === foodActive;
-      el.style.display = visible ? "" : "none";
+    foodFiltersEl.querySelectorAll(".filter-item.sub").forEach(el => {
+      const region = el.dataset.region;
+      el.style.display = region && region === foodActive ? "" : "none";
     });
   }
 
@@ -842,10 +914,8 @@
     foodActive = id;
 
     foodFiltersEl.querySelectorAll(".filter-item").forEach(el => {
-      if (el.dataset.restId) return; // 하위 항목은 별도 처리
-      const isAllBtn = el.dataset.id === "ALL_FOOD";
-      const isActive = (id === "ALL" && isAllBtn) ||
-                       (id !== "ALL" && id !== "NONE" && el.dataset.id === id);
+      if (el.classList.contains("sub")) return; // 하위 항목은 별도 처리
+      const isActive = id !== "NONE" && el.dataset.id === id;
       el.classList.toggle("active", isActive);
     });
 
@@ -857,19 +927,35 @@
   function toggleFoodMarker(rest) {
     const m = foodMarkers[rest.id];
     if (!m) return;
-    const el = foodFiltersEl.querySelector(`.filter-item.sub[data-rest-id="${rest.id}"]`);
     if (map.hasLayer(m)) {
       map.removeLayer(m);
-      el?.classList.remove("active");
     } else {
       m.addTo(map);
-      el?.classList.add("active");
       map.panTo(rest.coords);
       if (!isMobile()) {
         renderRestaurantPanel(rest);
         openPanel();
       }
     }
+    syncFoodSubActive();
+  }
+
+  function toggleAllFoodMarkers(regionId) {
+    const rests = restaurants.filter(r => r.regionId === regionId);
+    const anyVisible = rests.some(r => map.hasLayer(foodMarkers[r.id]));
+    rests.forEach(r => {
+      const m = foodMarkers[r.id];
+      if (!m) return;
+      if (anyVisible) {
+        if (map.hasLayer(m)) map.removeLayer(m);
+      } else {
+        if (!map.hasLayer(m)) m.addTo(map);
+      }
+    });
+    if (!anyVisible && rests.length) {
+      map.fitBounds(rests.map(r => r.coords), { padding: [40, 40] });
+    }
+    syncFoodSubActive();
   }
 
   function escapeHtml(str) {
