@@ -669,7 +669,7 @@
     groupAll.className = "filter-item";
     groupAll.dataset.id = "GROUP_ALL";
     groupAll.innerHTML = `<div class="dot" style="background:${GROUP_COLOR};"></div><span>2분단 탐방지 전체 보기</span>`;
-    groupAll.onclick = () => setGroupFilter("ALL");
+    groupAll.onclick = () => setGroupFilter();
     groupFiltersEl.appendChild(groupAll);
 
     groupVisits.forEach(g => {
@@ -677,7 +677,7 @@
       item.className = "filter-item sub";
       item.dataset.id = String(g.id);
       item.innerHTML = `<div class="dot" style="background:${GROUP_COLOR};"></div><span>${g.id}. ${escapeHtml(g.name)}</span>`;
-      item.onclick = () => setGroupFilter(g.id);
+      item.onclick = () => toggleGroupMarker(g);
       groupFiltersEl.appendChild(item);
     });
 
@@ -733,52 +733,45 @@
     });
   }
 
-  let groupActive = "NONE"; // "ALL" | "NONE" | "1".."6"
+  let groupActive = "NONE"; // "ALL" | "NONE"
 
   function updateGroupSubVisibility() {
     groupFiltersEl.querySelectorAll(".filter-item.sub").forEach(el => {
-      const visible = groupActive === "ALL" || el.dataset.id === groupActive;
-      el.style.display = visible ? "" : "none";
+      el.style.display = groupActive === "ALL" ? "" : "none";
     });
   }
 
-  function setGroupFilter(id) {
-    const key = String(id);
-    // 같은 필터를 다시 누르면 토글로 꺼짐
-    if (key === String(groupActive)) {
-      groupActive = "NONE";
-    } else {
-      groupActive = key;
-    }
-
-    groupFiltersEl.querySelectorAll(".filter-item").forEach(el => {
-      const isAllBtn = el.dataset.id === "GROUP_ALL";
-      const active = (groupActive === "ALL" && isAllBtn) ||
-                     (groupActive !== "ALL" && groupActive !== "NONE" && el.dataset.id === groupActive);
-      el.classList.toggle("active", active);
+  function syncGroupSubActive() {
+    groupFiltersEl.querySelectorAll(".filter-item.sub").forEach(el => {
+      const m = groupMarkers[Number(el.dataset.id)];
+      el.classList.toggle("active", !!(m && map.hasLayer(m)));
     });
+  }
 
-    groupVisits.forEach(g => {
-      const visible = groupActive === "ALL" || String(g.id) === groupActive;
-      const m = groupMarkers[g.id];
-      if (!m) return;
-      if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
-      else { if (map.hasLayer(m)) map.removeLayer(m); }
-    });
-
+  function setGroupFilter() {
+    // 전체 보기 토글 — 사이드바 펼침/접힘만 담당
+    groupActive = groupActive === "ALL" ? "NONE" : "ALL";
+    const allBtn = groupFiltersEl.querySelector('[data-id="GROUP_ALL"]');
+    allBtn?.classList.toggle("active", groupActive === "ALL");
     updateGroupSubVisibility();
-
-    // 개별 지점 클릭 시 패널 자동 표시
-    if (groupActive !== "ALL" && groupActive !== "NONE") {
-      const g = groupVisits.find(x => String(x.id) === groupActive);
-      if (g) {
-        renderGroupPanel(g);
-        openPanel();
-        if (!isMobile()) map.panTo(g.coords);
-      }
-    }
-
+    syncGroupSubActive();
     if (isTabletOrSmaller()) closeSidebar();
+  }
+
+  function toggleGroupMarker(g) {
+    const m = groupMarkers[g.id];
+    if (!m) return;
+    const el = groupFiltersEl.querySelector(`.filter-item.sub[data-id="${g.id}"]`);
+    if (map.hasLayer(m)) {
+      map.removeLayer(m);
+      el?.classList.remove("active");
+    } else {
+      m.addTo(map);
+      el?.classList.add("active");
+      renderGroupPanel(g);
+      openPanel();
+      if (!isMobile()) map.panTo(g.coords);
+    }
   }
 
   let tourActive = "NONE"; // "ALL" | "NONE" | "P1".."P9"
@@ -803,7 +796,7 @@
   }
 
   function setTourFilter(id) {
-    // 같은 필터를 다시 누르면 토글로 꺼짐
+    // 같은 필터를 다시 누르면 토글로 꺼짐 — 사이드바 펼침/접힘만 담당
     if (id === tourActive) id = "NONE";
     tourActive = id;
 
@@ -813,12 +806,6 @@
       el.classList.toggle("active", isActive);
     });
 
-    locations.forEach(loc => {
-      const visible = id === "ALL" || loc.programId === id;
-      const m = tourMarkers[loc.id];
-      if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
-      else { if (map.hasLayer(m)) map.removeLayer(m); }
-    });
     updateTourSubVisibility();
     syncTourSubActive();
     if (isTabletOrSmaller()) closeSidebar();
@@ -862,7 +849,7 @@
   }
 
   function setFoodFilter(id) {
-    // 같은 필터를 다시 누르면 토글로 꺼짐
+    // 같은 필터를 다시 누르면 토글로 꺼짐 — 사이드바 펼침/접힘만 담당
     if (id === foodActive) id = "NONE";
     foodActive = id;
 
@@ -874,12 +861,6 @@
       el.classList.toggle("active", isActive);
     });
 
-    restaurants.forEach(r => {
-      const visible = id === "ALL" || r.regionId === id;
-      const m = foodMarkers[r.id];
-      if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
-      else { if (map.hasLayer(m)) map.removeLayer(m); }
-    });
     updateFoodSubVisibility();
     syncFoodSubActive();
     if (isTabletOrSmaller()) closeSidebar();
