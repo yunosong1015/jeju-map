@@ -666,7 +666,7 @@
   function buildFilters() {
     // 2분단 탐방지 — 전체 보기 + 개별 6곳 하위메뉴
     const groupAll = document.createElement("div");
-    groupAll.className = "filter-item active";
+    groupAll.className = "filter-item";
     groupAll.dataset.id = "GROUP_ALL";
     groupAll.innerHTML = `<div class="dot" style="background:${GROUP_COLOR};"></div><span>2분단 탐방지 전체 보기</span>`;
     groupAll.onclick = () => setGroupFilter("ALL");
@@ -733,7 +733,14 @@
     });
   }
 
-  let groupActive = "ALL"; // "ALL" | "NONE" | "1".."6"
+  let groupActive = "NONE"; // "ALL" | "NONE" | "1".."6"
+
+  function updateGroupSubVisibility() {
+    groupFiltersEl.querySelectorAll(".filter-item.sub").forEach(el => {
+      const visible = groupActive === "ALL" || el.dataset.id === groupActive;
+      el.style.display = visible ? "" : "none";
+    });
+  }
 
   function setGroupFilter(id) {
     const key = String(id);
@@ -758,6 +765,8 @@
       if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
       else { if (map.hasLayer(m)) map.removeLayer(m); }
     });
+
+    updateGroupSubVisibility();
 
     // 개별 지점 클릭 시 패널 자동 표시
     if (groupActive !== "ALL" && groupActive !== "NONE") {
@@ -1025,7 +1034,7 @@
   });
 
   groupVisits.forEach(g => {
-    const marker = L.marker(g.coords, { icon: makeGroupIcon(g.id) }).addTo(map);
+    const marker = L.marker(g.coords, { icon: makeGroupIcon(g.id) });
     marker.bindPopup(`<b>🎯 ${escapeHtml(g.name)}</b><br><small>2분단 탐방지</small>`);
     marker.on("click", () => {
       renderGroupPanel(g);
@@ -1037,6 +1046,7 @@
   });
 
   buildFilters();
+  updateGroupSubVisibility();
   updateTourSubVisibility();
   updateFoodSubVisibility();
   if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
