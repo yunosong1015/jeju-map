@@ -664,29 +664,15 @@
 
   // 필터 사이드바
   function buildFilters() {
-    // 2분단 탐방지 — 전체 보기 + 개별 6곳 하위메뉴
-    const groupAll = document.createElement("div");
-    groupAll.className = "filter-item";
-    groupAll.dataset.id = "GROUP_ALL";
-    groupAll.innerHTML = `<div class="dot" style="background:${GROUP_COLOR};"></div><span>2분단 탐방지 전체 보기</span>`;
-    groupAll.onclick = () => setGroupFilter();
-    groupFiltersEl.appendChild(groupAll);
-
+    // 2분단 탐방지 — 6개 지점을 직접 노출
     groupVisits.forEach(g => {
       const item = document.createElement("div");
-      item.className = "filter-item sub";
+      item.className = "filter-item";
       item.dataset.id = String(g.id);
       item.innerHTML = `<div class="dot" style="background:${GROUP_COLOR};"></div><span>${g.id}. ${escapeHtml(g.name)}</span>`;
       item.onclick = () => toggleGroupMarker(g);
       groupFiltersEl.appendChild(item);
     });
-
-    const all = document.createElement("div");
-    all.className = "filter-item";
-    all.dataset.id = "ALL";
-    all.innerHTML = `<div class="dot" style="background:#666;"></div><span>관광지 전체 보기</span>`;
-    all.onclick = () => setTourFilter("ALL");
-    filtersEl.appendChild(all);
 
     Object.entries(programs).forEach(([id, p]) => {
       const item = document.createElement("div");
@@ -707,13 +693,6 @@
     });
 
     // 식당 필터
-    const allFood = document.createElement("div");
-    allFood.className = "filter-item";
-    allFood.dataset.id = "ALL_FOOD";
-    allFood.innerHTML = `<div class="dot" style="background:#666;border-radius:4px;"></div><span>식당 전체 보기</span>`;
-    allFood.onclick = () => setFoodFilter("ALL");
-    foodFiltersEl.appendChild(allFood);
-
     Object.entries(regions).forEach(([id, r]) => {
       const item = document.createElement("div");
       item.className = "filter-item";
@@ -733,35 +712,10 @@
     });
   }
 
-  let groupActive = "NONE"; // "ALL" | "NONE"
-
-  function updateGroupSubVisibility() {
-    groupFiltersEl.querySelectorAll(".filter-item.sub").forEach(el => {
-      el.style.display = groupActive === "ALL" ? "" : "none";
-    });
-  }
-
-  function syncGroupSubActive() {
-    groupFiltersEl.querySelectorAll(".filter-item.sub").forEach(el => {
-      const m = groupMarkers[Number(el.dataset.id)];
-      el.classList.toggle("active", !!(m && map.hasLayer(m)));
-    });
-  }
-
-  function setGroupFilter() {
-    // 전체 보기 토글 — 사이드바 펼침/접힘만 담당
-    groupActive = groupActive === "ALL" ? "NONE" : "ALL";
-    const allBtn = groupFiltersEl.querySelector('[data-id="GROUP_ALL"]');
-    allBtn?.classList.toggle("active", groupActive === "ALL");
-    updateGroupSubVisibility();
-    syncGroupSubActive();
-    if (isTabletOrSmaller()) closeSidebar();
-  }
-
   function toggleGroupMarker(g) {
     const m = groupMarkers[g.id];
     if (!m) return;
-    const el = groupFiltersEl.querySelector(`.filter-item.sub[data-id="${g.id}"]`);
+    const el = groupFiltersEl.querySelector(`.filter-item[data-id="${g.id}"]`);
     if (map.hasLayer(m)) {
       map.removeLayer(m);
       el?.classList.remove("active");
@@ -1027,7 +981,6 @@
   });
 
   buildFilters();
-  updateGroupSubVisibility();
   updateTourSubVisibility();
   updateFoodSubVisibility();
   if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
