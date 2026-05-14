@@ -781,6 +781,18 @@
     });
   }
 
+  function updateTourSubVisibility() {
+    filtersEl.querySelectorAll(".filter-item.sub[data-loc-id]").forEach(el => {
+      const loc = locations.find(l => l.id === Number(el.dataset.locId));
+      if (!loc) return;
+      let visible;
+      if (tourActive === "ALL") visible = true;
+      else if (tourActive === "NONE") visible = false;
+      else visible = loc.programId === tourActive;
+      el.style.display = visible ? "" : "none";
+    });
+  }
+
   function setTourFilter(id) {
     // 같은 필터를 다시 누르면 토글로 꺼짐
     if (id === tourActive) id = "NONE";
@@ -798,6 +810,7 @@
       if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
       else { if (map.hasLayer(m)) map.removeLayer(m); }
     });
+    updateTourSubVisibility();
     syncTourSubActive();
     if (isTabletOrSmaller()) closeSidebar();
   }
@@ -827,6 +840,18 @@
     });
   }
 
+  function updateFoodSubVisibility() {
+    foodFiltersEl.querySelectorAll(".filter-item.sub[data-rest-id]").forEach(el => {
+      const rest = restaurants.find(r => r.id === Number(el.dataset.restId));
+      if (!rest) return;
+      let visible;
+      if (foodActive === "ALL") visible = true;
+      else if (foodActive === "NONE") visible = false;
+      else visible = rest.regionId === foodActive;
+      el.style.display = visible ? "" : "none";
+    });
+  }
+
   function setFoodFilter(id) {
     // 같은 필터를 다시 누르면 토글로 꺼짐
     if (id === foodActive) id = "NONE";
@@ -846,6 +871,7 @@
       if (visible) { if (!map.hasLayer(m)) m.addTo(map); }
       else { if (map.hasLayer(m)) map.removeLayer(m); }
     });
+    updateFoodSubVisibility();
     syncFoodSubActive();
     if (isTabletOrSmaller()) closeSidebar();
   }
@@ -1011,6 +1037,8 @@
   });
 
   buildFilters();
+  updateTourSubVisibility();
+  updateFoodSubVisibility();
   if (bounds.length) map.fitBounds(bounds, { padding: [40, 40] });
 </script>
 
