@@ -223,6 +223,38 @@
     border-top: 1px solid var(--border);
   }
 
+  .search-box {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .search-box input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 9px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.83rem;
+    font-family: inherit;
+  }
+  .search-box input:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  .search-box button {
+    flex-shrink: 0;
+    padding: 7px 12px;
+    border: none;
+    border-radius: 6px;
+    background: var(--primary);
+    color: white;
+    font-size: 0.83rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .search-box button:hover { background: var(--primary-dark); }
+  .search-box button:disabled { opacity: 0.6; cursor: default; }
+
   .leaflet-popup-content { font-family: inherit; font-size: 0.85rem; margin: 8px 12px; }
   .leaflet-popup-content b { color: var(--primary-dark); }
 
@@ -340,6 +372,10 @@
   <div class="backdrop" id="backdrop"></div>
 
   <aside id="sidebar">
+    <div class="search-box">
+      <input type="text" id="region-search" placeholder="지역 검색 (예: 한라산, 협재해변)" />
+      <button id="region-search-btn">검색</button>
+    </div>
     <h3>🎯 2분단 탐방지</h3>
     <div id="group-filters"></div>
     <div class="sidebar-section">
@@ -1011,6 +1047,23 @@
     `;
   }
 
+  function renderSearchPanel(q, match, score) {
+    const pct = Math.round((score ?? 1) * 100);
+    panel.innerHTML = `
+      <h2>🔍 ${escapeHtml(match.name)}</h2>
+      <span class="program-badge" style="background:#444;">검색 결과 · ${pct}% 일치</span>
+
+      <div class="info-row"><div class="label">검색어</div><div class="value">${escapeHtml(q)}</div></div>
+      <div class="info-row"><div class="label">주소</div><div class="value">${escapeHtml(match.display_name)}</div></div>
+      <div class="info-row"><div class="label">좌표</div><div class="value">${match.lat.toFixed(5)}, ${match.lon.toFixed(5)}</div></div>
+
+      <div class="schedule">
+        <div class="title">💡 안내</div>
+        <div style="font-size:0.85rem;line-height:1.6;">입력하신 '${escapeHtml(q)}' 와(과) 가장 비슷한 위치입니다. 지도의 🔍 마커를 클릭하면 이 정보가 다시 표시됩니다.</div>
+      </div>
+    `;
+  }
+
   function renderRestaurantPanel(r) {
     const region = regions[r.regionId];
     const telLink = r.phone.replace(/[^0-9]/g, "");
@@ -1100,6 +1153,101 @@
     });
     groupMarkers[g.id] = marker;
     bounds.push(g.coords);
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // 지역 검색 (OpenStreetMap Nominatim 지오코딩)
+  // ─────────────────────────────────────────────────────────────
+  let searchMarker = null;
+  const regionSearchInput = document.getElementById("region-search");
+  const regionSearchBtn = document.getElementById("region-search-btn");
+
+  // 한 검색어로 Nominatim 조회 — 제주 영역으로 결과를 한정, 여러 후보 반환
+  async function geocodeMany(query) {
+    const url = "https://nominatim.openstreetmap.org/search?format=json&limit=15&accept-language=ko"
+      + "&viewbox=126.10,33.60,127.00,33.10&bounded=1&q=" + encodeURIComponent(query);
+    const res = await fetch(url);
+    return res.ok ? res.json() : [];
+  }
+
+  // 문자열 유사도 (글자 2-gram 기반 Dice 계수, 0~1)
+  function bigrams(str) {
+    const t = String(str).toLowerCase().replace(/\s+/g, "");
+    const set = new Set();
+    if (t.length < 2) { if (t) set.add(t); return set; }
+    for (let i = 0; i < t.length - 1; i++) set.add(t.slice(i, i + 2));
+    return set;
+  }
+  function similarity(a, b) {
+    const A = bigrams(a), B = bigrams(b);
+    if (!A.size || !B.size) return a === b ? 1 : 0;
+    let inter = 0;
+    A.forEach(x => { if (B.has(x)) inter++; });
+    return (2 * inter) / (A.size + B.size);
+  }
+
+  async function searchRegion() {
+    const q = regionSearchInput.value.trim();
+    if (!q) return;
+    regionSearchBtn.disabled = true;
+    regionSearchBtn.textContent = "검색 중";
+    try {
+      // 입력 그대로 + "제주" 접두/접미 변형으로 후보를 폭넓게 수집
+      const variants = [q, `제주${q}`, `제주 ${q}`, `${q} 제주`];
+      const lists = await Promise.all(variants.map(geocodeMany));
+
+      const candidates = [];
+      lists.flat().forEach(r => {
+        candidates.push({
+          name: r.name || r.display_name.split(",")[0].trim(),
+          display_name: r.display_name,
+          lat: parseFloat(r.lat),
+          lon: parseFloat(r.lon)
+        });
+      });
+      // 앱에 등록된 장소도 후보에 포함 (관광지·식당·2분단 탐방지)
+      locations.forEach(l => candidates.push({ name: l.name, display_name: l.address, lat: l.coords[0], lon: l.coords[1] }));
+      restaurants.forEach(r => candidates.push({ name: r.name, display_name: r.address, lat: r.coords[0], lon: r.coords[1] }));
+      groupVisits.forEach(g => candidates.push({ name: g.name, display_name: "2분단 탐방지", lat: g.coords[0], lon: g.coords[1] }));
+
+      // 입력어와 가장 비슷한 후보 선택
+      let best = null, bestScore = 0;
+      candidates.forEach(c => {
+        const s = similarity(q, c.name);
+        if (s > bestScore) { bestScore = s; best = c; }
+      });
+
+      // 정식 명칭이 아니어도 50% 이상 비슷하면 표시
+      if (!best || bestScore < 0.5) {
+        alert(`'${q}' 와(과) 50% 이상 비슷한 위치를 찾을 수 없습니다.`);
+        return;
+      }
+
+      const coords = [best.lat, best.lon];
+      const pct = Math.round(bestScore * 100);
+      if (searchMarker) map.removeLayer(searchMarker);
+      searchMarker = L.marker(coords).addTo(map);
+      searchMarker
+        .bindPopup(`<b>🔍 ${escapeHtml(best.name)}</b><br><small>'${escapeHtml(q)}' 와 ${pct}% 일치</small>`)
+        .openPopup();
+      searchMarker.on("click", () => {
+        renderSearchPanel(q, best, bestScore);
+        openPanel();
+        if (!isMobile()) map.panTo(coords);
+      });
+      map.setView(coords, 14);
+      if (isTabletOrSmaller()) closeSidebar();
+    } catch (e) {
+      alert("검색 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      regionSearchBtn.disabled = false;
+      regionSearchBtn.textContent = "검색";
+    }
+  }
+
+  regionSearchBtn.addEventListener("click", searchRegion);
+  regionSearchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") searchRegion();
   });
 
   buildFilters();
